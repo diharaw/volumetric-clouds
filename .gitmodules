@@ -1,0 +1,3 @@
+[submodule "external/dw-sample-framework"]
+	path = external/dw-sample-framework
+	url = https://github.com/diharaw/dw-sample-framework.git
