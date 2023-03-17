@@ -84,7 +84,11 @@ protected:
         ImGui::InputFloat("Cloud Max Height", &m_cloud_max_height);
         ImGui::SliderFloat("Shape Noise Scale", &m_shape_noise_scale, 0.1f, 1.0f);
         ImGui::SliderFloat("Detail Noise Scale", &m_detail_noise_scale, 0.0f, 100.0f);
+        ImGui::SliderFloat("Detail Noise Modifier", &m_detail_noise_modifier, 0.0f, 1.0f);
+        ImGui::SliderFloat("Turbulence Noise Scale", &m_turbulence_noise_scale, 0.0f, 100.0f);
+        ImGui::SliderFloat("Turbulence Amount", &m_turbulence_amount, 0.0f, 100.0f);
         ImGui::SliderFloat("Cloud Coverage", &m_cloud_coverage, 0.0f, 1.0f);
+        ImGui::SliderFloat("Precipitation", &m_precipitation, 1.0f, 20.0f);
 
         ImGui::SliderAngle("Wind Angle", &m_wind_angle, 0.0f, -180.0f);
         ImGui::SliderFloat("Wind Speed", &m_wind_speed, 0.0f, 200.0f);
@@ -452,8 +456,9 @@ private:
         m_clouds_program->set_uniform("u_CloudMaxHeight", m_cloud_max_height);
         m_clouds_program->set_uniform("u_ShapeNoiseScale", noise_scale);
         m_clouds_program->set_uniform("u_DetailNoiseScale", noise_scale * m_detail_noise_scale);
-        m_clouds_program->set_uniform("u_CurlDistortScale", noise_scale * m_curl_distort_scale);
-        m_clouds_program->set_uniform("u_CurlDistortAmount", 150.0f + m_curl_distort_amount);
+        m_clouds_program->set_uniform("u_DetailNoiseModifier", m_detail_noise_modifier);
+        m_clouds_program->set_uniform("u_TurbulenceNoiseScale", noise_scale * m_turbulence_noise_scale);
+        m_clouds_program->set_uniform("u_TurbulenceAmount", m_turbulence_amount);
         m_clouds_program->set_uniform("u_CloudCoverage", m_cloud_coverage);
         m_clouds_program->set_uniform("u_WindDirection", m_wind_direction);
         m_clouds_program->set_uniform("u_WindSpeed", m_wind_speed);
@@ -466,6 +471,7 @@ private:
         m_clouds_program->set_uniform("u_SunColor", m_sun_color);
         m_clouds_program->set_uniform("u_CloudBaseColor", m_cloud_base_color);
         m_clouds_program->set_uniform("u_CloudTopColor", m_cloud_top_color);
+        m_clouds_program->set_uniform("u_Precipitation", m_precipitation);
         m_clouds_program->set_uniform("u_AmbientLightFactor", m_ambient_light_factor);
         m_clouds_program->set_uniform("u_SunLightFactor", m_sun_light_factor);
         m_clouds_program->set_uniform("u_HenyeyGreensteinGForward", m_henyey_greenstein_g_forward);
@@ -579,11 +585,12 @@ private:
     int32_t   m_max_num_steps       = 128;
     float     m_cloud_min_height    = 1500.0f;
     float     m_cloud_max_height    = 4000.0f;
-    float     m_shape_noise_scale         = 0.3f;
+    float     m_shape_noise_scale   = 0.3f;
     float     m_detail_noise_scale  = 5.5f;
-    float     m_curl_distort_scale  = 7.44f;
-    float     m_curl_distort_amount = 407.0f;
-    float     m_cloud_coverage      = 0.725f;
+    float     m_detail_noise_modifier  = 0.5f;
+    float     m_turbulence_noise_scale = 7.44f;
+    float     m_turbulence_amount   = 1.0f;
+    float     m_cloud_coverage      = 0.7f;
     float     m_wind_angle          = 0.0f;
     float     m_wind_speed          = 50.0f;
     float     m_wind_shear_offset   = 500.0f;
@@ -595,6 +602,7 @@ private:
     glm::vec3 m_sun_color                    = glm::vec3(1.0f, 0.9f, 0.6f);
     glm::vec3 m_cloud_base_color             = glm::vec3(0.78f, 0.86f, 1.0f);
     glm::vec3 m_cloud_top_color              = glm::vec3(1.0f);
+    float     m_precipitation = 1.0f;
     float     m_ambient_light_factor         = 0.551f;
     float     m_sun_light_factor             = 0.79f;
     float     m_henyey_greenstein_g_forward  = 0.4f;

@@ -44,8 +44,9 @@ uniform float 	  u_CloudMinHeight;
 uniform float 	  u_CloudMaxHeight;
 uniform float 	  u_ShapeNoiseScale;
 uniform float 	  u_DetailNoiseScale;
-uniform float 	  u_CurlDistortAmount;
-uniform float 	  u_CurlDistortScale;
+uniform float 	  u_DetailNoiseModifier;
+uniform float 	  u_TurbulenceNoiseScale;
+uniform float 	  u_TurbulenceAmount;
 uniform float 	  u_CloudCoverage;
 uniform vec3 	  u_WindDirection;
 uniform float	  u_WindSpeed;
@@ -58,6 +59,7 @@ uniform vec3      u_SunDir;
 uniform vec3      u_SunColor;
 uniform vec3      u_CloudBaseColor;
 uniform vec3      u_CloudTopColor;
+uniform float 	  u_Precipitation;
 uniform float 	  u_AmbientLightFactor;
 uniform float 	  u_SunLightFactor;
 uniform float 	  u_HenyeyGreensteinGForward;
@@ -188,10 +190,28 @@ float sample_cloud_density(vec3 _position, float _height_fraction, float _lod)
     base_cloud_with_coverage *= cloud_coverage;
 
     // Exit out if base cloud density is zero.
-    if (base_cloud_with_coverage == 0.0f)
+    if (base_cloud_with_coverage <= 0.0f)
         return 0.0f;
 
-    return base_cloud_with_coverage;
+	// Sample curl noise texture.
+	vec2 curl_noise = textureLod(s_CurlNoise, position.xz * u_TurbulenceNoiseScale, 0.0f).rg;
+	
+	// Add some turbulence to bottom of clouds.
+	position.xy += curl_noise * (1.0f - _height_fraction) * u_TurbulenceAmount;
+
+	// Sample high-frequency noises.
+	vec3 high_frequency_noises = textureLod(s_DetailNoise, position * u_DetailNoiseScale, _lod).rgb;
+
+	// Build high-frequency Worley noise FBM.
+	float high_freq_fbm = (high_frequency_noises.r * 0.625f) + (high_frequency_noises.g * 0.25f) + (high_frequency_noises.b * 0.125f);
+
+	// Transition from wispy shapes to billowy shapes over height.
+	float high_freq_noise_modifier = mix(1.0f - high_freq_fbm, high_freq_fbm, clamp(_height_fraction * 10.0f, 0.0f, 1.0f));
+
+	// Erode the base cloud shape with the distorted high-frequency Worley noise.
+	float final_cloud = remap(base_cloud_with_coverage, high_freq_noise_modifier * u_DetailNoiseModifier, 1.0f, 0.0f, 1.0f);
+
+    return final_cloud;
 }
 
 // ------------------------------------------------------------------
@@ -199,7 +219,7 @@ float sample_cloud_density(vec3 _position, float _height_fraction, float _lod)
 // GPU Pro 7
 float beer_law(float density)
 {
-	float d = -density;// * _Density;
+	float d = -density * u_Precipitation;// * _Density;
 	return max(exp(d), exp(d * 0.5f) * 0.7f);
 }
 
