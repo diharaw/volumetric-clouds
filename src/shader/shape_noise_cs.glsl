@@ -10,7 +10,7 @@ layout(local_size_x = 8, local_size_y = 8, local_size_z = 8) in;
 // UNIFORMS ---------------------------------------------------------
 // ------------------------------------------------------------------
 
-layout(binding = 0, r16f) uniform image3D i_Noise;
+layout(binding = 0, rgba16f) uniform image3D i_Noise;
 
 uniform int u_Size;
 
@@ -32,11 +32,10 @@ void main()
     float worley2 = worley_fbm(tex_coord, freq * 4.0f);
  
     float perlin_worley = remap(perlin, 0.0f, 1.0f, worley0, 1.0f); // perlin-worley
-    float worley        = worley0 * 0.625f + worley1 * 0.125f + worley2 * 0.25f; 
-    
-    float cloud = remap(perlin_worley, worley - 1.0f, 1.0f, 0.0f, 1.0f);
+ 
+    vec4 cloud = vec4(perlin_worley, worley0, worley1, worley2);
 
-    imageStore(i_Noise, ivec3(gl_GlobalInvocationID), vec4(cloud));
+    imageStore(i_Noise, ivec3(gl_GlobalInvocationID), cloud);
 }
 
 // ------------------------------------------------------------------

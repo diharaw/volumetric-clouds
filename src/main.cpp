@@ -71,6 +71,7 @@ protected:
 
         render_scene();
         render_clouds();
+        tonemap();
     }
 
     // -----------------------------------------------------------------------------------------------------------------------------------
@@ -79,7 +80,26 @@ protected:
     {
         ImGui::SliderAngle("Sun Angle", &m_sun_angle, 0.0f, -180.0f);
 
+        ImGui::InputFloat("Cloud Min Height", &m_cloud_min_height);
+        ImGui::InputFloat("Cloud Max Height", &m_cloud_max_height);
+        ImGui::SliderFloat("Shape Noise Scale", &m_shape_noise_scale, 0.1f, 1.0f);
+        ImGui::SliderFloat("Detail Noise Scale", &m_detail_noise_scale, 0.0f, 100.0f);
+        ImGui::SliderFloat("Cloud Coverage", &m_cloud_coverage, 0.0f, 1.0f);
+
+        ImGui::SliderAngle("Wind Angle", &m_wind_angle, 0.0f, -180.0f);
+        ImGui::SliderFloat("Wind Speed", &m_wind_speed, 0.0f, 200.0f);
+        ImGui::InputFloat("Wind Shear Offset", &m_wind_shear_offset);
+        ImGui::ColorPicker3("Sun Color", &m_sun_color.x);
+
+        ImGui::InputFloat("Planet Radius", &m_planet_radius);
+        ImGui::SliderInt("Max Num Steps", &m_max_num_steps, 16, 256);
+
+        ImGui::SliderFloat("Exposure", &m_exposure, 0.0f, 10.0f);
+
+        m_planet_center = glm::vec3(0.0f, -m_planet_radius, 0.0f);
+
         m_light_direction = glm::normalize(glm::vec3(0.0f, sin(m_sun_angle), cos(m_sun_angle)));
+        m_wind_direction  = glm::normalize(glm::vec3(cos(m_wind_angle), sin(m_wind_angle), 0.0f));
     }
 
     // -----------------------------------------------------------------------------------------------------------------------------------
@@ -194,7 +214,7 @@ private:
 
         // Create clouds shaders
         m_triangle_vs = dw::gl::Shader::create_from_file(GL_VERTEX_SHADER, "shader/triangle_vs.glsl");
-        m_clouds_fs = dw::gl::Shader::create_from_file(GL_FRAGMENT_SHADER, "shader/clouds_fs.glsl");
+        m_clouds_fs   = dw::gl::Shader::create_from_file(GL_FRAGMENT_SHADER, "shader/clouds_fs.glsl");
 
         if (!m_triangle_vs || !m_clouds_fs)
         {
@@ -206,6 +226,23 @@ private:
         m_clouds_program = dw::gl::Program::create({ m_triangle_vs, m_clouds_fs });
 
         if (!m_clouds_program)
+        {
+            DW_LOG_FATAL("Failed to create Shader Program");
+            return false;
+        }
+
+        m_tonemap_fs = dw::gl::Shader::create_from_file(GL_FRAGMENT_SHADER, "shader/tonemap_fs.glsl");
+
+        if (!m_tonemap_fs)
+        {
+            DW_LOG_FATAL("Failed to create Shaders");
+            return false;
+        }
+
+        // Create general shader program
+        m_tonemap_program = dw::gl::Program::create({ m_triangle_vs, m_tonemap_fs });
+
+        if (!m_tonemap_program)
         {
             DW_LOG_FATAL("Failed to create Shader Program");
             return false;
@@ -240,8 +277,27 @@ private:
 
     bool create_textures()
     {
-        m_shape_noise_texture = dw::gl::Texture3D::create(128, 128, 128, 1, GL_R16F, GL_RED, GL_HALF_FLOAT); 
-        m_detail_noise_texture = dw::gl::Texture3D::create(32, 32, 32, 1, GL_R16F, GL_RED, GL_HALF_FLOAT); 
+        m_hdr_output_texture = dw::gl::Texture2D::create(m_width, m_height, 1, 1, 1, GL_RGBA16F, GL_RGBA, GL_HALF_FLOAT);
+        m_hdr_output_texture->set_wrapping(GL_CLAMP_TO_EDGE, GL_CLAMP_TO_EDGE, GL_CLAMP_TO_EDGE);
+
+        m_depth_output_texture = dw::gl::Texture2D::create(m_width, m_height, 1, 1, 1, GL_DEPTH_COMPONENT32F, GL_DEPTH_COMPONENT, GL_FLOAT);
+        m_depth_output_texture->set_wrapping(GL_CLAMP_TO_EDGE, GL_CLAMP_TO_EDGE, GL_CLAMP_TO_EDGE);
+
+        m_hdr_output_framebuffer = dw::gl::Framebuffer::create({ m_hdr_output_texture }, m_depth_output_texture);
+
+        m_shape_noise_texture = dw::gl::Texture3D::create(128, 128, 128, -1, GL_RGBA16F, GL_RGBA, GL_HALF_FLOAT);
+        m_shape_noise_texture->set_wrapping(GL_REPEAT, GL_REPEAT, GL_REPEAT);
+        m_shape_noise_texture->set_min_filter(GL_LINEAR_MIPMAP_LINEAR);
+
+        m_detail_noise_texture = dw::gl::Texture3D::create(32, 32, 32, -1, GL_RGBA16F, GL_RGBA, GL_HALF_FLOAT);
+        m_detail_noise_texture->set_wrapping(GL_REPEAT, GL_REPEAT, GL_REPEAT);
+        m_detail_noise_texture->set_min_filter(GL_LINEAR_MIPMAP_LINEAR);
+
+        m_blue_noise_texture = dw::gl::Texture2D::create_from_file("texture/LDR_LLL1_0.png");
+        m_blue_noise_texture->set_wrapping(GL_REPEAT, GL_REPEAT, GL_REPEAT);
+
+        m_curl_noise_texture = dw::gl::Texture2D::create_from_file("texture/curlNoise.png");
+        m_curl_noise_texture->set_wrapping(GL_REPEAT, GL_REPEAT, GL_REPEAT);
 
         return true;
     }
@@ -260,7 +316,7 @@ private:
 
     bool load_scene()
     {
-        m_placeholder_texture = dw::gl::Texture2D::create_from_file("texture/grid.png");
+        m_placeholder_texture = dw::gl::Texture2D::create_from_file("texture/grid.png", true, true);
 
         m_plane = dw::Mesh::load("mesh/plane.obj");
 
@@ -287,7 +343,7 @@ private:
     {
         m_shape_noise_program->use();
         m_shape_noise_program->set_uniform("u_Size", (int)m_shape_noise_texture->width());
-        
+
         m_shape_noise_texture->bind_image(0, 0, 0, GL_READ_WRITE, m_shape_noise_texture->internal_format());
 
         const uint32_t TEXTURE_SIZE = m_shape_noise_texture->width();
@@ -296,6 +352,8 @@ private:
         glDispatchCompute(TEXTURE_SIZE / NUM_THREADS, TEXTURE_SIZE / NUM_THREADS, TEXTURE_SIZE / NUM_THREADS);
 
         glFinish();
+
+        m_shape_noise_texture->generate_mipmaps();
     }
 
     // -----------------------------------------------------------------------------------------------------------------------------------
@@ -313,6 +371,8 @@ private:
         glDispatchCompute(TEXTURE_SIZE / NUM_THREADS, TEXTURE_SIZE / NUM_THREADS, TEXTURE_SIZE / NUM_THREADS);
 
         glFinish();
+
+        m_detail_noise_texture->generate_mipmaps();
     }
 
     // -----------------------------------------------------------------------------------------------------------------------------------
@@ -349,7 +409,7 @@ private:
         glEnable(GL_CULL_FACE);
         glCullFace(GL_BACK);
 
-        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        m_hdr_output_framebuffer->bind();
         glViewport(0, 0, m_width, m_height);
 
         glClearColor(0.3f, 0.3f, 0.3f, 1.0f);
@@ -371,6 +431,67 @@ private:
     void render_clouds()
     {
         m_clouds_program->use();
+
+        if (m_clouds_program->set_uniform("s_ShapeNoise", 0))
+            m_shape_noise_texture->bind(0);
+
+        if (m_clouds_program->set_uniform("s_DetailNoise", 1))
+            m_detail_noise_texture->bind(1);
+
+        if (m_clouds_program->set_uniform("s_BlueNoise", 2))
+            m_blue_noise_texture->bind(2);
+
+        if (m_clouds_program->set_uniform("s_CurlNoise", 3))
+            m_blue_noise_texture->bind(3);
+
+        float noise_scale = 0.00001f + m_shape_noise_scale * 0.0004f;
+
+        m_clouds_program->set_uniform("u_PlanetCenter", m_planet_center);
+        m_clouds_program->set_uniform("u_PlanetRadius", m_planet_radius);
+        m_clouds_program->set_uniform("u_CloudMinHeight", m_cloud_min_height);
+        m_clouds_program->set_uniform("u_CloudMaxHeight", m_cloud_max_height);
+        m_clouds_program->set_uniform("u_ShapeNoiseScale", noise_scale);
+        m_clouds_program->set_uniform("u_DetailNoiseScale", noise_scale * m_detail_noise_scale);
+        m_clouds_program->set_uniform("u_CurlDistortScale", noise_scale * m_curl_distort_scale);
+        m_clouds_program->set_uniform("u_CurlDistortAmount", 150.0f + m_curl_distort_amount);
+        m_clouds_program->set_uniform("u_CloudCoverage", m_cloud_coverage);
+        m_clouds_program->set_uniform("u_WindDirection", m_wind_direction);
+        m_clouds_program->set_uniform("u_WindSpeed", m_wind_speed);
+        m_clouds_program->set_uniform("u_WindShearOffset", m_wind_shear_offset);
+        m_clouds_program->set_uniform("u_Time", static_cast<float>(glfwGetTime()));
+        m_clouds_program->set_uniform("u_MaxNumSteps", (float)m_max_num_steps);
+        m_clouds_program->set_uniform("u_LightStepLength", m_light_step_length);
+        m_clouds_program->set_uniform("u_LightConeRadius", m_light_cone_radius);
+        m_clouds_program->set_uniform("u_SunDir", -m_light_direction);
+        m_clouds_program->set_uniform("u_SunColor", m_sun_color);
+        m_clouds_program->set_uniform("u_CloudBaseColor", m_cloud_base_color);
+        m_clouds_program->set_uniform("u_CloudTopColor", m_cloud_top_color);
+        m_clouds_program->set_uniform("u_AmbientLightFactor", m_ambient_light_factor);
+        m_clouds_program->set_uniform("u_SunLightFactor", m_sun_light_factor);
+        m_clouds_program->set_uniform("u_HenyeyGreensteinGForward", m_henyey_greenstein_g_forward);
+        m_clouds_program->set_uniform("u_HenyeyGreensteinGBackward", m_henyey_greenstein_g_backward);
+
+        glDrawArrays(GL_TRIANGLES, 0, 3);
+    }
+
+    // -----------------------------------------------------------------------------------------------------------------------------------
+
+    void tonemap()
+    {
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        glViewport(0, 0, m_width, m_height);
+
+        glClearColor(0.3f, 0.3f, 0.3f, 1.0f);
+        glClearDepth(1.0);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+        m_tonemap_program->use();
+
+        if (m_tonemap_program->set_uniform("s_HDR", 0))
+            m_hdr_output_texture->bind(0);
+
+        m_tonemap_program->set_uniform("u_Exposure", m_exposure);
+
         glDrawArrays(GL_TRIANGLES, 0, 3);
     }
 
@@ -433,20 +554,52 @@ private:
 
 private:
     // General GPU resources.
-    dw::gl::Shader::Ptr    m_mesh_vs;
-    dw::gl::Shader::Ptr    m_mesh_fs;
-    dw::gl::Shader::Ptr    m_triangle_vs;
-    dw::gl::Shader::Ptr    m_clouds_fs;
-    dw::gl::Shader::Ptr    m_shape_noise_cs;
-    dw::gl::Shader::Ptr    m_detail_noise_cs;
-    dw::gl::Program::Ptr   m_mesh_program;
-    dw::gl::Program::Ptr   m_clouds_program;
-    dw::gl::Program::Ptr   m_shape_noise_program;
-    dw::gl::Program::Ptr   m_detail_noise_program;
-    dw::gl::Buffer::Ptr    m_global_ubo;
-    dw::gl::Texture2D::Ptr m_placeholder_texture;
-    dw::gl::Texture3D::Ptr m_shape_noise_texture;
-    dw::gl::Texture3D::Ptr m_detail_noise_texture;
+    dw::gl::Shader::Ptr      m_mesh_vs;
+    dw::gl::Shader::Ptr      m_mesh_fs;
+    dw::gl::Shader::Ptr      m_triangle_vs;
+    dw::gl::Shader::Ptr      m_clouds_fs;
+    dw::gl::Shader::Ptr      m_tonemap_fs;
+    dw::gl::Shader::Ptr      m_shape_noise_cs;
+    dw::gl::Shader::Ptr      m_detail_noise_cs;
+    dw::gl::Program::Ptr     m_mesh_program;
+    dw::gl::Program::Ptr     m_clouds_program;
+    dw::gl::Program::Ptr     m_tonemap_program;
+    dw::gl::Program::Ptr     m_shape_noise_program;
+    dw::gl::Program::Ptr     m_detail_noise_program;
+    dw::gl::Buffer::Ptr      m_global_ubo;
+    dw::gl::Texture2D::Ptr   m_hdr_output_texture;
+    dw::gl::Texture2D::Ptr   m_depth_output_texture;
+    dw::gl::Texture2D::Ptr   m_placeholder_texture;
+    dw::gl::Texture2D::Ptr   m_blue_noise_texture;
+    dw::gl::Texture2D::Ptr   m_curl_noise_texture;
+    dw::gl::Texture3D::Ptr   m_shape_noise_texture;
+    dw::gl::Texture3D::Ptr   m_detail_noise_texture;
+    dw::gl::Framebuffer::Ptr m_hdr_output_framebuffer;
+
+    int32_t   m_max_num_steps       = 128;
+    float     m_cloud_min_height    = 1500.0f;
+    float     m_cloud_max_height    = 4000.0f;
+    float     m_shape_noise_scale         = 0.3f;
+    float     m_detail_noise_scale  = 5.5f;
+    float     m_curl_distort_scale  = 7.44f;
+    float     m_curl_distort_amount = 407.0f;
+    float     m_cloud_coverage      = 0.725f;
+    float     m_wind_angle          = 0.0f;
+    float     m_wind_speed          = 50.0f;
+    float     m_wind_shear_offset   = 500.0f;
+    glm::vec3 m_wind_direction      = glm::vec3(0.0f);
+    float     m_planet_radius       = 35000.0f;
+    glm::vec3 m_planet_center;
+    float     m_light_step_length            = 64.0f;
+    float     m_light_cone_radius            = 0.4f;
+    glm::vec3 m_sun_color                    = glm::vec3(1.0f, 0.9f, 0.6f);
+    glm::vec3 m_cloud_base_color             = glm::vec3(0.78f, 0.86f, 1.0f);
+    glm::vec3 m_cloud_top_color              = glm::vec3(1.0f);
+    float     m_ambient_light_factor         = 0.551f;
+    float     m_sun_light_factor             = 0.79f;
+    float     m_henyey_greenstein_g_forward  = 0.4f;
+    float     m_henyey_greenstein_g_backward = 0.179f;
+    float     m_exposure                     = 0.6f;
 
     dw::Mesh::Ptr               m_plane;
     std::unique_ptr<dw::Camera> m_main_camera;
