@@ -339,7 +339,7 @@ void main()
 
 	float cos_angle = dot(ray.direction, u_SunDir);
 	vec4  clouds    = ray_march(ray_start, ray.direction * step_size, cos_angle, num_steps);
-	vec4  sky       = vec4(calculateSkyLuminanceRGB(u_SunDir, ray.direction, 2.0f) * 0.05f, 1.0f);
+	vec4  sky       = vec4(calculate_sky_luminance_rgb(u_SunDir, ray.direction, 2.0f) * 0.05f, 1.0f);
 
     FS_OUT_Color = clouds.a * clouds.rgb + (1.0f - clouds.a) * sky.rgb;
 }

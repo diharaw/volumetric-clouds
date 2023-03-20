@@ -75,7 +75,7 @@ vec3 calculatePerezLuminanceYxy( in float theta, in float gamma, in vec3 A, in v
 	return ( 1.0 + A * exp( B / cos( theta ) ) ) * ( 1.0 + C * exp( D * gamma ) + E * cos( gamma ) * cos( gamma ) );
 }
 
-vec3 calculateSkyLuminanceRGB( in vec3 s, in vec3 e, in float t )
+vec3 calculate_sky_luminance_rgb( in vec3 s, in vec3 e, in float t )
 {
 	vec3 A, B, C, D, E;
 	calculatePerezDistribution( t, A, B, C, D, E );

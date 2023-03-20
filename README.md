@@ -21,7 +21,7 @@ git clone --recursive https://github.com/diharaw/volumetric-clouds.git
 cd volumetric-clouds
 mkdir build
 cd build
-cmake -G "Visual Studio 16 2019" ..
+cmake -G ..
 ```
 
 ## Dependencies
@@ -29,7 +29,7 @@ cmake -G "Visual Studio 16 2019" ..
 
 ## License
 ```
-Copyright (c) 2022 Dihara Wijetunga
+Copyright (c) 2023 Dihara Wijetunga
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and 
 associated documentation files (the "Software"), to deal in the Software without restriction, 
