@@ -88,7 +88,9 @@ protected:
         ImGui::SliderFloat("Turbulence Noise Scale", &m_turbulence_noise_scale, 0.0f, 100.0f);
         ImGui::SliderFloat("Turbulence Amount", &m_turbulence_amount, 0.0f, 100.0f);
         ImGui::SliderFloat("Cloud Coverage", &m_cloud_coverage, 0.0f, 1.0f);
-        ImGui::SliderFloat("Precipitation", &m_precipitation, 1.0f, 20.0f);
+        ImGui::SliderFloat("Precipitation", &m_precipitation, 1.0f, 2.5f);
+        ImGui::SliderFloat("Ambient Factor", &m_ambient_light_factor, 0.0f, 1.0f);
+        ImGui::SliderFloat("Sun Light Factor", &m_sun_light_factor, 0.0f, 1.0f);
 
         ImGui::SliderAngle("Wind Angle", &m_wind_angle, 0.0f, -180.0f);
         ImGui::SliderFloat("Wind Speed", &m_wind_speed, 0.0f, 200.0f);
@@ -471,7 +473,7 @@ private:
         m_clouds_program->set_uniform("u_SunColor", m_sun_color);
         m_clouds_program->set_uniform("u_CloudBaseColor", m_cloud_base_color);
         m_clouds_program->set_uniform("u_CloudTopColor", m_cloud_top_color);
-        m_clouds_program->set_uniform("u_Precipitation", m_precipitation);
+        m_clouds_program->set_uniform("u_Precipitation", m_precipitation * 0.01f);
         m_clouds_program->set_uniform("u_AmbientLightFactor", m_ambient_light_factor);
         m_clouds_program->set_uniform("u_SunLightFactor", m_sun_light_factor);
         m_clouds_program->set_uniform("u_HenyeyGreensteinGForward", m_henyey_greenstein_g_forward);
@@ -599,12 +601,12 @@ private:
     glm::vec3 m_planet_center;
     float     m_light_step_length            = 64.0f;
     float     m_light_cone_radius            = 0.4f;
-    glm::vec3 m_sun_color                    = glm::vec3(1.0f, 0.9f, 0.6f);
+    glm::vec3 m_sun_color                    = glm::vec3(1.0f, 1.0f, 1.0f);
     glm::vec3 m_cloud_base_color             = glm::vec3(0.78f, 0.86f, 1.0f);
     glm::vec3 m_cloud_top_color              = glm::vec3(1.0f);
     float     m_precipitation = 1.0f;
-    float     m_ambient_light_factor         = 0.551f;
-    float     m_sun_light_factor             = 0.79f;
+    float     m_ambient_light_factor         = 0.12f;
+    float     m_sun_light_factor             = 1.0f;
     float     m_henyey_greenstein_g_forward  = 0.4f;
     float     m_henyey_greenstein_g_backward = 0.179f;
     float     m_exposure                     = 0.6f;
