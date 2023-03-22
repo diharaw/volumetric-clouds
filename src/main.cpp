@@ -90,7 +90,7 @@ protected:
         ImGui::SliderFloat("Cloud Coverage", &m_cloud_coverage, 0.0f, 1.0f);
         ImGui::SliderFloat("Precipitation", &m_precipitation, 1.0f, 2.5f);
         ImGui::SliderFloat("Ambient Factor", &m_ambient_light_factor, 0.0f, 1.0f);
-        ImGui::SliderFloat("Sun Light Factor", &m_sun_light_factor, 0.0f, 1.0f);
+        ImGui::SliderFloat("Sun Light Factor", &m_sun_light_factor, 0.0f, 10.0f);
 
         ImGui::SliderAngle("Wind Angle", &m_wind_angle, 0.0f, -180.0f);
         ImGui::SliderFloat("Wind Speed", &m_wind_speed, 0.0f, 200.0f);
@@ -448,7 +448,7 @@ private:
             m_blue_noise_texture->bind(2);
 
         if (m_clouds_program->set_uniform("s_CurlNoise", 3))
-            m_blue_noise_texture->bind(3);
+            m_curl_noise_texture->bind(3);
 
         float noise_scale = 0.00001f + m_shape_noise_scale * 0.0004f;
 

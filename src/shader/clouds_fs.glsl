@@ -355,15 +355,32 @@ vec4 ray_march(vec3 _ray_origin, vec3 _ray_direction, float _cos_angle, float _s
 
 void main()
 {
+	// Generate a camera ray to the current fragment.
 	Ray ray = generate_ray();
 
+	// Figure out where our ray will intersect the sphere that represents the beginning of the cloud layer. 
 	vec3 ray_start = ray_sphere_intersection(ray, u_PlanetCenter, u_PlanetRadius + u_CloudMinHeight);
+
+	// Similarly, figure out where the ray intersects the end of the cloud layer.
 	vec3 ray_end   = ray_sphere_intersection(ray, u_PlanetCenter, u_PlanetRadius + u_CloudMaxHeight);
 
-	float num_steps = mix(u_MaxNumSteps, u_MaxNumSteps * 0.5f, clamp(dot(ray.direction, vec3(0.0f, 1.0f, 0.0f)), 0.0f, 1.0f));
+	// Get a random number that we'll use to jitter our ray.
+	const float rng = blue_noise();
+	
+	// The maximum number of ray march steps to use.
+	const float max_steps = u_MaxNumSteps;
+	
+	// The minimum number of ray march steps to use with an added offset to prevent banding.
+	const float min_steps = (u_MaxNumSteps * 0.5f) + (rng * 2.0f);
+
+	// The number of ray march steps is determined depending on how steep the viewing angle is.
+	float num_steps = mix(max_steps, min_steps, ray.direction.y);
+
+	// Using the number of steps we can determine the step size of our ray march.
 	float step_size = length(ray_start - ray_end) / num_steps;
 
-	ray_start += step_size * ray.direction * blue_noise();
+	// Jitter the ray to prevent banding.
+	ray_start += step_size * ray.direction * rng;
 
 	float cos_angle = dot(ray.direction, u_SunDir);
 	vec4  clouds    = ray_march(ray_start, ray.direction, cos_angle, step_size, num_steps);
