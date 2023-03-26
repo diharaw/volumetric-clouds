@@ -308,6 +308,22 @@ private:
         return true;
     }
 
+    void texture_bind_image(dw::gl::Texture::Ptr tex, uint32_t unit, uint32_t mip_level, uint32_t layer, GLenum access, GLenum format)
+    {
+        // Hack(kbostelmann): Set layered to TRUE. Bind the enire array/all slices instead of a single element/slice.
+        if (tex->target() == GL_TEXTURE_3D)
+        {
+            tex->bind(tex->id());
+
+            // GLuint unit, GLuint texture, GLint level, GLboolean layered, GLint layer, GLenum access, GLenum format
+            glBindImageTexture(unit, tex->id(), mip_level, GL_TRUE, layer, access, format);
+        }
+        else
+        {
+            tex->bind_image(tex->id(), mip_level, layer, access, format);
+        }
+    }
+
     // -----------------------------------------------------------------------------------------------------------------------------------
 
     bool create_uniform_buffer()
@@ -350,7 +366,7 @@ private:
         m_shape_noise_program->use();
         m_shape_noise_program->set_uniform("u_Size", (int)m_shape_noise_texture->width());
 
-        m_shape_noise_texture->bind_image(0, 0, 0, GL_READ_WRITE, m_shape_noise_texture->internal_format());
+        texture_bind_image(m_shape_noise_texture, 0, 0, 0, GL_READ_WRITE, m_shape_noise_texture->internal_format());
 
         const uint32_t TEXTURE_SIZE = m_shape_noise_texture->width();
         const uint32_t NUM_THREADS  = 8;
@@ -369,7 +385,7 @@ private:
         m_detail_noise_program->use();
         m_detail_noise_program->set_uniform("u_Size", (int)m_detail_noise_texture->width());
 
-        m_detail_noise_texture->bind_image(0, 0, 0, GL_READ_WRITE, m_detail_noise_texture->internal_format());
+        texture_bind_image(m_detail_noise_texture, 0, 0, 0, GL_READ_WRITE, m_detail_noise_texture->internal_format());
 
         const uint32_t TEXTURE_SIZE = m_detail_noise_texture->width();
         const uint32_t NUM_THREADS  = 8;
