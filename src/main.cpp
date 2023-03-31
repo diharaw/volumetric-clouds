@@ -12,6 +12,17 @@
 #include <random>
 #include <fstream>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+__declspec(dllexport) uint32_t NvOptimusEnablement = 1;
+__declspec(dllexport) int AmdPowerXpressRequestHighPerformance = 1;
+
+#ifdef __cplusplus
+}
+#endif
+
 #define CAMERA_FAR_PLANE 1000.0f
 
 struct GlobalUniforms
